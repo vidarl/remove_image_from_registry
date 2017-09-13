@@ -90,3 +90,12 @@ acl:
     actions: ["*"]
     comment: "jane can do anything with any image in the repo named myrepo"
 ```
+
+# Relevant registry bugs
+Be aware of a [cache bug](https://github.com/docker/distribution/issues/2094#issuecomment-326454550) in the garbage collector.
+As a consequence of this bug, you'll need to restart your registry after running the garbage collector (or clear redis cache if you are using that).
+
+Also note that when deleting a image, [the repository will still remain in the catalogue](https://github.com/docker/distribution/issues/2314).
+
+If you use docker client to push and overwrite an existing tag in the registry, the garbage collector will *not*
+remove the blobs beloning to the overwritten image. [This bug comment](https://github.com/docker/distribution/issues/2212#issuecomment-292021283) explains why.
