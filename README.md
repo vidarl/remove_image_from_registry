@@ -36,7 +36,18 @@ OPTIONS
         Prompt for password
  -u <username>
         Use the given username when authenticating with the registry
- 
+ --raw <url> <http-method> [http-header]
+         Send custom request to the registry. When using this argument, do not use the  [IMAGE] argument too.
+         Example:
+         ./remove_image_from_registry.sh \
+              -u admin \
+              --insecure \
+              --raw \
+              mydockerregistry:5000/v2/imagename/manifests/latest \
+              GET \
+              "Accept: application/vnd.docker.distribution.manifest.v2+json"
+
+
 Password may also be set using the environment variable REGISTRY_PASSWORD
  $ export REGISTRY_PASSWORD=sesame
 ```
