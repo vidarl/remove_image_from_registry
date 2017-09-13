@@ -60,7 +60,7 @@ export REGISTRY_PASSWORD=foobar
 ./remove_image_from_registry.sh -u foo --insecure mydockerregistry:5000/myrepo/zoombie:latest
 ```
 
-Note that this script will not delete the actuall blobs from the registry, only the manifests. Once you have deleted the manifests you have to manually run the garbage collector in order to delete the blobs. You do so by entring your registry container:
+Note that this script will not delete the actual blobs from the registry, only the manifests. Once you have deleted the manifests you have to manually run the garbage collector in order to delete the blobs. You do so by entering your registry container:
 
 ```sh
 docker exec -ti registry_registry_1 /bin/sh
