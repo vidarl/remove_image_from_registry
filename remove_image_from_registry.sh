@@ -162,18 +162,18 @@ function sendRegistryRequest
     else
         CUSTOM_HEADER=""
     fi
-    WWW_AUTH_HEADER=`curl -s -i $INSECURE -X $HTTP_METHOD -H "Content-Type: application/json" ${URL} |grep Www-Authenticate|sed 's|.*realm="\(.*\)",service="\(.*\)",scope="\(.*\)".*|\1,\2,\3|'`
+    WWW_AUTH_HEADER=`curl -sS -i $INSECURE -X $HTTP_METHOD -H "Content-Type: application/json" ${URL} |grep Www-Authenticate|sed 's|.*realm="\(.*\)",service="\(.*\)",scope="\(.*\)".*|\1,\2,\3|'`
 
     REALM=`echo $WWW_AUTH_HEADER|cut -f 1 -d ","`
     SERVICE=`echo $WWW_AUTH_HEADER|cut -f 2 -d ","`
     SCOPE=`echo $WWW_AUTH_HEADER|cut -f 3 -d ","`
 
-    TOKEN=`curl -f -s $INSECURE -G --data-urlencode "service=${SERVICE}" --data-urlencode "scope=${SCOPE}" "${REALM}" -K- <<< $CREDENTIALS_STRING|jq .token|cut -f 2 -d "\""`
+    TOKEN=`curl -f -sS $INSECURE -G --data-urlencode "service=${SERVICE}" --data-urlencode "scope=${SCOPE}" "${REALM}" -K- <<< $CREDENTIALS_STRING|jq .token|cut -f 2 -d "\""`
     RESULT=$?
     if [ $RESULT -ne 0 ] || [ "$TOKEN" == "" ]; then
         # Run command again (without -f arg) and output message to std err 
         >&2 echo Auth server responded:
-        >&2 curl -s $INSECURE -G --data-urlencode "service=${SERVICE}" --data-urlencode "scope=${SCOPE}" "${REALM}" -K- <<< $CREDENTIALS_STRING
+        >&2 curl -sS $INSECURE -G --data-urlencode "service=${SERVICE}" --data-urlencode "scope=${SCOPE}" "${REALM}" -K- <<< $CREDENTIALS_STRING
         if [ $RESULT -eq 0 ]; then
             RESULT=42
         fi
@@ -188,19 +188,19 @@ function sendRegistryRequest
         CURL_ARG="-v "
     fi
     if [ "$CUSTOM_HEADER" == "" ]; then
-        curl $CURL_ARG -s $INSECURE -X $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
+        curl $CURL_ARG -sS $INSECURE -X $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
         RESULT=$?
         if [ $RESULT -ne 0 ]; then
         # Run command again (without -f arg) and output message to std err 
-            >&2 curl -s $INSECURE -X $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
+            >&2 curl -sS $INSECURE -X $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
             exit $RESULT
         fi
     else
-        curl $CURL_ARG -i -s $INSECURE -X $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
+        curl $CURL_ARG -i -sS $INSECURE -X $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
         RESULT=$?
         if [ $RESULT -ne 0 ]; then
         # Run command again (without -f arg) and output message to std err 
-            >&2 curl -i -s $INSECURE -X $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
+            >&2 curl -i -sS $INSECURE -X $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
             exit $RESULT
         fi
     fi
