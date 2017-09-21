@@ -65,6 +65,21 @@ EOF
     exit $RESULT;
 }
 
+function validateImageName
+{
+    local IMAGE_NAME
+    IMAGE_NAME="$1"
+    if [[ "$IMAGE_NAME" == https://* ]]; then
+        echo "Image name or raw URL should not start with https://"
+        exit 1
+    fi
+    if [[ "$IMAGE_NAME" == http://* ]]; then
+        echo "Image name or raw URL should not start with http://"
+        echo "Anyway, registry must use SSL in order to make token based auth work"
+        exit 1
+    fi
+}
+
 function parseArguments
 {
     while (( "$#" )); do
@@ -83,6 +98,7 @@ function parseArguments
         elif [ "$1" = "--raw" ]; then
             shift
             RAW_URL="$1"
+            validateImageName "$1"
             shift
             RAW_HTTP_METHOD="$1"
             shift
@@ -97,6 +113,7 @@ function parseArguments
                 echo "Error: You may only provide IMAGE name once"
                 exit 1
             fi
+            validateImageName "$1"
             IMAGE_ARG="$1"
             HOST=`echo $IMAGE_ARG|cut -f 1 -d "/"`
             IMAGE=`echo $IMAGE_ARG|cut -f 2- -d "/"|cut -f 1 -d ":"`
