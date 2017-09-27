@@ -89,6 +89,7 @@ function parseArguments
         elif [ "$1" = "-p" ]; then
             echo -n "Password: "
             read -s REGISTRY_PASSWORD
+            echo
         elif [ "$1" = "--insecure" ]; then
             INSECURE=" --insecure"
         elif [ "$1" = "--help" ]; then
