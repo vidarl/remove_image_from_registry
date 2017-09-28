@@ -23,9 +23,18 @@ Don't be afraid to delete images which contains layers used by other images. The
  $ ./remove_image_from_registry.sh [OPTIONS] [IMAGE]
 
 IMAGE
- Image name has the format registryhost:port/reposityry/imagename:version
+ Image name has the format registryhost:port/repository/imagename:version
  For instance : mydockerregistry:5000/myrepo/zoombie:latest
  Note that the version tag ("latest" in this example) is mandatory.
+ Please note that this script will delete the image from the repository, not only the tag; if the
+ image you are deleting have multiple tags ( for instance "1.0" and "latest" ), both tags will be
+ removed from the registry.
+ Docker registry does not support deleting only a tag ATM, ref https://github.com/docker/distribution/issues/2317
+ The option "--tag-only" tries to circumvent this by restoring other tags which also disappear from
+ the registry during the delete. However, this is not entirely safe:
+  - Do not delete multiple images concurrently.
+  - Do not run registry garbage collector while deleting images (this you should never do anyway....).
+  - Do not create new local tags for the image during the delete operation.
  
 OPTIONS
  -h, --help
@@ -46,6 +55,8 @@ OPTIONS
               mydockerregistry:5000/v2/imagename/manifests/latest \
               GET \
               "Accept: application/vnd.docker.distribution.manifest.v2+json"
+ --tag-only
+        After deleting the image, try to recover all other tags which also pointed to the image
 
 
 Password may also be set using the environment variable REGISTRY_PASSWORD

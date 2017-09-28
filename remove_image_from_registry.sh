@@ -11,6 +11,7 @@ INSECURE=""
 RAW_URL=""
 RAW_HTTP_METHOD=""
 RAW_HTTP_HEADER=""
+TAG_ONLY=false
 
 function printUsage
 {
@@ -24,9 +25,18 @@ Usage:
  $ ./remove_image_from_registry.sh [OPTIONS] [IMAGE]
 
 IMAGE
- Image name has the format registryhost:port/reposityry/imagename:version
+ Image name has the format registryhost:port/repository/imagename:version
  For instance : mydockerregistry:5000/myrepo/zoombie:latest
  Note that the version tag ("latest" in this example) is mandatory.
+ Please note that this script will delete the image from the repository, not only the tag; if the
+ image you are deleting have multiple tags ( for instance "1.0" and "latest" ), both tags will be
+ removed from the registry.
+ Docker registry does not support deleting only a tag ATM, ref https://github.com/docker/distribution/issues/2317
+ The option "--tag-only" tries to circumvent this by restoring other tags which also disappear from
+ the registry during the delete. However, this is not entirely safe:
+  - Do not delete multiple images concurrently.
+  - Do not run registry garbage collector while deleting images (this you should never do anyway....).
+  - Do not create new local tags for the image during the delete operation.
 
 REQUIREMENTS
  The registry must run a v2 registry and have token based authentication enabled.
@@ -56,6 +66,8 @@ OPTIONS
              mydockerregistry:5000/v2/imagename/manifests/latest \\
              GET \\
              "Accept: application/vnd.docker.distribution.manifest.v2+json"
+ --tag-only
+        After deleting the image, try to recover all other tags which also pointed to the image
 
  
 Password may also be set using the environment variable REGISTRY_PASSWORD
@@ -104,6 +116,8 @@ function parseArguments
             RAW_HTTP_METHOD="$1"
             shift
             RAW_HTTP_HEADER="$1"
+        elif [ "$1" = "--tag-only" ]; then
+            TAG_ONLY=true
         else
             # If first param is a dash, we have an invalid argumwent
             if [ ${1:0:1} == "-" ]; then
@@ -215,17 +229,86 @@ function sendRegistryRequest
     fi
 }
 
+function getTags
+{
+    TAGS=`sendRegistryRequest https://${HOST}/v2/${IMAGE}/tags/list GET |jq --compact-output .tags`
+    RESULT=$?
+    if [ "$TAGS" == "" ] || [ $RESULT -ne 0 ]; then
+        exit $RESULT
+    fi
+    # imagenames and tags cannot contain special characters or space. So let's just remove that JSON syntax
+    TAGS=${TAGS//\"}
+    TAGS=${TAGS//\[}
+    TAGS=${TAGS//\]}
+    TAGS=${TAGS//,/ }
+}
+
+# $1 is the tag you want to take backup of
+# $2 is tag name used for backup (backup tag)
+function backupLocalImage
+{
+    # If the tag we are going to delete exists locally we need to take a backup of that
+    # then download the image from registry ( remote and local image may not match even though they have the same name )
+    if [ `docker images --format "{{.Repository}}:{{.Tag}}" ${HOST}/${IMAGE}:$1| wc -l` -eq 1 ]; then
+        BACKUP_TAKEN="true"
+        docker tag ${HOST}/${IMAGE}:$1 ${HOST}/${IMAGE}:$2
+        docker rmi ${HOST}/${IMAGE}:$1
+    fi
+}
+
+# $1 is the tag you want to restore to
+# $2 is the tag name used when taking the backup (backup tag)
+function restoreBackup
+{
+    if [ `docker images --format "{{.Repository}}:{{.Tag}}" ${HOST}/${IMAGE}:$2| wc -l` -eq 1 ]; then
+#        docker rmi ${HOST}/${IMAGE}:$1
+        docker tag ${HOST}/${IMAGE}:$2 ${HOST}/${IMAGE}:$1
+        docker rmi ${HOST}/${IMAGE}:$2
+    fi
+}
+
 parseArguments "$@"
 
 if [ "$RAW_URL" = "" ]; then
+    if [ "$TAG_ONLY" = "true" ]; then
+        getTags
+        backupLocalImage $TAG remove_image_from_registry1
+        docker pull ${HOST}/${IMAGE}:${TAG}
+    fi
     SHA_REQ=`sendRegistryRequest https://${HOST}/v2/${IMAGE}/manifests/${TAG} GET "Accept: application/vnd.docker.distribution.manifest.v2+json"`
     RESULT=$?
     if [ "$SHA_REQ" == "" ] || [ $RESULT -ne 0 ]; then
+        docker rmi ${HOST}/${IMAGE}:${TAG}
+        restoreBackup $TAG remove_image_from_registry1
         exit $RESULT
     fi
 
     SHA=$(echo "$SHA_REQ"|grep "Docker-Content-Digest:"|cut -f 2- -d ":"|tr -d '[:space:]')
     sendRegistryRequest https://${HOST}/v2/${IMAGE}/manifests/${SHA} DELETE
+    if [ "$TAG_ONLY" = "true" ]; then
+        OLDTAGS="$TAGS"
+        getTags
+        TAGSPIPE="|${TAGS// /|}|"
+
+        for i in $OLDTAGS; do
+            # Clearly, we expect TAG to be gone
+            # We don't want to restore that one
+            if [ "$i" = "$TAG" ]; then
+                continue
+            fi
+
+            if [[ $TAGSPIPE != *"|$i|"* ]]; then
+                echo This tag needs to be restored : ${HOST}/${IMAGE}:${i}
+                backupLocalImage $i remove_image_from_registry2
+                docker tag ${HOST}/${IMAGE}:${TAG} ${HOST}/${IMAGE}:${i}
+                docker push ${HOST}/${IMAGE}:${i}
+                docker rmi ${HOST}/${IMAGE}:${i}
+                restoreBackup $i remove_image_from_registry2
+            fi
+        done
+        docker rmi ${HOST}/${IMAGE}:${TAG}
+        restoreBackup $TAG remove_image_from_registry1
+    fi
 else
     sendRegistryRequest "https://${RAW_URL}" "${RAW_HTTP_METHOD}" "${RAW_HTTP_HEADER}"
 fi
