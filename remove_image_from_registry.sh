@@ -147,23 +147,31 @@ function sendRegistryRequest
     local SCOPE
     local CUSTOM_HEADER
     local HTTP_METHOD
+    local CURL_HTTP_METHOD_OPTION
     local CURL_ARG
     local RESULT
     
     URL="$1"
 
+    CURL_HTTP_METHOD_OPTION="-X"
     if [ "$2" != "" ]; then
         HTTP_METHOD="$2"
     else
         HTTP_METHOD="GET"
     fi
     
+    # If HTTP_METHOD == "HEAD", we'll need to use -I option instead
+    if [ $HTTP_METHOD = "HEAD" ]; then
+        CURL_HTTP_METHOD_OPTION="-I"
+        HTTP_METHOD=""
+    fi
+
     if [ "$3" != "" ]; then
         CUSTOM_HEADER="$3"
     else
         CUSTOM_HEADER=""
     fi
-    WWW_AUTH_HEADER=`curl -sS -i $INSECURE -X $HTTP_METHOD -H "Content-Type: application/json" ${URL} |grep Www-Authenticate|sed 's|.*realm="\(.*\)",service="\(.*\)",scope="\(.*\)".*|\1,\2,\3|'`
+    WWW_AUTH_HEADER=`curl -sS -i $INSECURE $CURL_HTTP_METHOD_OPTION $HTTP_METHOD -H "Content-Type: application/json" ${URL} |grep Www-Authenticate|sed 's|.*realm="\(.*\)",service="\(.*\)",scope="\(.*\)".*|\1,\2,\3|'`
 
     REALM=`echo $WWW_AUTH_HEADER|cut -f 1 -d ","`
     SERVICE=`echo $WWW_AUTH_HEADER|cut -f 2 -d ","`
@@ -189,19 +197,19 @@ function sendRegistryRequest
         CURL_ARG="-v "
     fi
     if [ "$CUSTOM_HEADER" == "" ]; then
-        curl $CURL_ARG -sS $INSECURE -X $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
+        curl $CURL_ARG -sS $INSECURE $CURL_HTTP_METHOD_OPTION $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
         RESULT=$?
         if [ $RESULT -ne 0 ]; then
         # Run command again (without -f arg) and output message to std err 
-            >&2 curl -sS $INSECURE -X $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
+            >&2 curl -sS $INSECURE $CURL_HTTP_METHOD_OPTION $HTTP_METHOD -H "Authorization: Bearer $TOKEN" "${URL}"
             exit $RESULT
         fi
     else
-        curl $CURL_ARG -i -sS $INSECURE -X $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
+        curl $CURL_ARG -i -sS $INSECURE $CURL_HTTP_METHOD_OPTION $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
         RESULT=$?
         if [ $RESULT -ne 0 ]; then
         # Run command again (without -f arg) and output message to std err 
-            >&2 curl -i -sS $INSECURE -X $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
+            >&2 curl -i -sS $INSECURE $CURL_HTTP_METHOD_OPTION $HTTP_METHOD -H "$CUSTOM_HEADER" -H "Authorization: Bearer $TOKEN" "${URL}"
             exit $RESULT
         fi
     fi
